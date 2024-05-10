@@ -154,7 +154,6 @@ let main = async () => {
 
         let timeEnd = Date.now();
         if (timeEnd - timeStart < dt) {
-            console.log(timeEnd - timeStart)
             await new Promise((resolve) => setTimeout(resolve, dt - (timeEnd - timeStart)));
         }
     }
