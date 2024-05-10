@@ -11,7 +11,6 @@ function compileShader(gl, type, source) {
     }
     return shader;
 }
-
 function linkProgram(gl, vertexShader, fragmentShader) {
     const program = gl.createProgram();
     gl.attachShader(program, vertexShader);
@@ -26,7 +25,6 @@ function createBuffer(gl, data, hint) {
     gl.bufferData(gl.ARRAY_BUFFER, data, hint);
     return buffer;
 }
-
 function resizeCanvasToDisplaySize(canvas) {
     // Lookup the size the browser is displaying the canvas in CSS pixels.
     const displayWidth  = canvas.clientWidth;
@@ -53,8 +51,17 @@ async function main() {
     canvas.addEventListener("click", async () => {
         await canvas.requestPointerLock();
     });
-    
+      
+
     let camera = {
+        movementInput: {
+            forward: 0,
+            right: 0,
+            up: 0,
+            back: 0,
+            left: 0,
+            down: 0
+        },
         position: [0.0, 0.0, -2.0],
         rotation: [0, 0],
         fov: 1,
@@ -69,36 +76,37 @@ async function main() {
         let sinPhi = Math.sin(phi);
 
         let matrix = [
-            cosTheta, 0, -sinTheta, 0,
-            sinTheta * sinPhi, cosPhi, cosTheta * sinPhi, 0,
-            sinTheta * cosPhi, -sinPhi, cosTheta * cosPhi, 0,
+            cosTheta, sinTheta*sinPhi, sinTheta*cosPhi, 0,
+            0, cosPhi, -sinPhi, 0,
+            -sinTheta, cosTheta*sinPhi, cosTheta * cosPhi, 0,
             0, 0, 0, 1
 
         ]
         return matrix
     }
-
-    document.addEventListener("keydown", (event) => {
+    let movementHandler = (strength) => (event) => {
         if (event.key === "w") {
-            camera.position[2] += 0.01;
+            camera.movementInput.forward = strength;
         }
         if (event.key === "s") {
-            camera.position[2] -= 0.01;
+            camera.movementInput.back = strength;
         }
         if (event.key === "a") {
-            camera.position[0] -= 0.01;
+            camera.movementInput.left = strength;
         }
         if (event.key === "d") {
-            camera.position[0] += 0.01;
+            camera.movementInput.right = strength;
         }
         if (event.key === "q") {
-            camera.position[1] -= 0.01;
+            camera.movementInput.down = strength;
         }
         if (event.key === "e") {
-            camera.position[1] += 0.01;
+            camera.movementInput.up = strength;
         }
-    });
+    }
 
+    document.addEventListener("keydown", movementHandler(0.5))
+    document.addEventListener("keyup", movementHandler(0));
     document.addEventListener("mousemove", (event) => {
         if (document.pointerLockElement === canvas) {
             camera.rotation[0] += event.movementX / 1000;
@@ -147,6 +155,15 @@ async function main() {
         let [w, h] = resizeCanvasToDisplaySize(gl.canvas);
         camera.aspect = w / h;
 
+        let movementVector = [
+            camera.movementInput.right - camera.movementInput.left, 
+            camera.movementInput.up - camera.movementInput.down, 
+            camera.movementInput.forward - camera.movementInput.back
+        ];
+        let cameraRotationMatrix = rotationMatrix(camera.rotation[0], camera.rotation[1])
+        let rotatedMovementVector = movementVector.map((v, i) => movementVector[0] * cameraRotationMatrix[i * 4] + movementVector[1] * cameraRotationMatrix[i * 4 + 1] + movementVector[2] * cameraRotationMatrix[i * 4 + 2]);
+        camera.position = camera.position.map((v, i) => v + rotatedMovementVector[i] * 0.1);
+
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
@@ -165,13 +182,13 @@ async function main() {
         let offset = 0;        // start at the beginning of the buffer
         gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset)
         
-        gl.uniformMatrix4fv(uniforms.u_cameraRotation, true, rotationMatrix(camera.rotation[0], camera.rotation[1]));
+        gl.uniformMatrix4fv(uniforms.u_cameraRotation, false, cameraRotationMatrix);
         gl.uniform4fv(uniforms.u_cameraPosition, [...camera.position, 0]);
         gl.uniform1f(uniforms.u_cameraFov, camera.fov);
         gl.uniform1f(uniforms.u_cameraAspect, camera.aspect);
         gl.uniform1f(uniforms.u_cameraNear, camera.near);
         gl.uniform1f(uniforms.u_cameraFar, camera.far);
-        
+
         let primitiveType = gl.POINTS;
         offset = 0;
         let count = 100;
