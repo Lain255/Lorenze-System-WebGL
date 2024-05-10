@@ -15,6 +15,6 @@ void main() {
     float y = (u_cameraFov*point.y)/(point.z);
     float z = (point.z-u_cameraNear)/(u_cameraFar-u_cameraNear);
 
-    gl_PointSize = 2.0;
+    gl_PointSize = 1.0;
     gl_Position = vec4(x, y, z, 1.0) - vec4(0.0, 0.0, 1.0, 0.0);
 }

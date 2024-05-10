@@ -108,13 +108,12 @@ let main = async () => {
         let timeStart = Date.now();
 
         let [w, h] = resizeCanvasToDisplaySize(gl.canvas);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         camera.aspect = w / h;
 
         moveCamera(dt);
         lorenzeMoveParams(dt);
 
-        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-        
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT);
         

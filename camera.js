@@ -49,12 +49,57 @@ let mouseHandler = (canvas) => (event) => {
     }
 }
 let addCameraInputListeners = (canvas) => {
-    canvas.addEventListener("click", async () => {
-        await canvas.requestPointerLock();
+    canvas.addEventListener("click", () => {
+        if (globalThis.document.pointerLockElement !== canvas) {
+            canvas.requestPointerLock();
+        }
     });
+    
+    
     globalThis.document.addEventListener("keydown", movementHandler)
     globalThis.document.addEventListener("keyup", movementHandler);
     globalThis.document.addEventListener("mousemove", mouseHandler(canvas));
+
+    if(globalThis.document.fullscreenEnabled) {
+        canvas.addEventListener("click", () => {
+            canvas.requestFullscreen();
+        })
+    }
+
+
+    if (false && globalThis.DeviceOrientationEvent) {
+        globalThis.addEventListener("deviceorientation", (event) => {
+            camera.rotation[0] = -event.gamma * Math.PI / 180;
+            camera.rotation[1] = Math.PI/4 -event.beta * Math.PI / 180;
+        });
+    }
+    if (false) {
+        let id = undefined
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        globalThis.document.addEventListener("ontouchmove", (evt) => {
+            let dx = evt.touches[0].clientX - touchStartX
+            let dy = evt.touches[0].clientY - touchStartY
+            touchStartX = evt.touches[0].clientX
+            touchStartY = evt.touches[0].clientY
+        
+            if (evt.touches[0].identifier === touchID) {
+                camera.position[0] += dx / 1000;
+                camera.position[1] += dy / 1000;
+            }
+            else {
+                touchID = evt.touches[0].identifier
+            }
+        })
+        globalThis.document.addEventListener("ontouchend", (event) => {
+            if (event.touches.length === 0) {
+                id = undefined;
+            }
+        }, false)
+
+    }
+
 }
 let moveCamera = (dt) => {
     let movementVector = [
