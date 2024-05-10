@@ -2,18 +2,63 @@ import { compileShader, linkProgram, createBuffer, resizeCanvasToDisplaySize, ge
 import { rotationMatrix } from "./matrix.js";
 import { camera, movementHandler, mouseHandler, moveCamera, addCameraInputListeners } from "./camera.js";
 
-let step = (position, dt) => {
-    let sigma = 10
-    let beta = 8.0/3.0
-    let rho = 28
+let lorenzeParams = {
+    sigma : 10,
+    beta : 8.0/3.0,
+    rho : 28
+}
+let lorenzeInputs = {
+    sigmaMinus: 0,
+    sigmaPlus: 0,
+    betaMinus: 0,
+    betaPlus: 0,
+    rhoMinus: 0,
+    rhoPlus: 0
+}
+let lorenzeDict = {
+    "b": "sigmaMinus",
+    "g": "sigmaPlus",
+    "n": "betaMinus",
+    "h": "betaPlus",
+    "m": "rhoMinus",
+    "j": "rhoPlus"
+}
+let lorenzeShifted = false;
+let lorenzeHandler = (event) => {
+    let strength = (event.type === "keydown" ? 0.5 : 0)
+    
+    if (event.key.toLowerCase() in lorenzeDict) {
+        lorenzeInputs[lorenzeDict[event.key.toLowerCase()]] = strength;
+    }
+    if (event.key.toLowerCase() === "r") {
+        for (let i = 0; i < positions.length; i += 4) {
+            positions[i + 0] = Math.random() * 2 - 1;
+            positions[i + 1] = Math.random() * 2 - 1;
+            positions[i + 2] = Math.random() * 2 - 1;
+            positions[i + 3] = 1;
+            lorenzeParams.sigma = 10;
+            lorenzeParams.beta = 8.0/3.0;
+            lorenzeParams.rho = 28;
+        }
+    }
+    if (event.key.toLowerCase() === "shift") {
+        lorenzeShifted = event.type === "keydown";
+    }
+}
+let lorenzeMoveParams = (dt) => {
+    let strength = lorenzeShifted ? 10 : 1;
+    lorenzeParams.sigma += (lorenzeInputs.sigmaPlus - lorenzeInputs.sigmaMinus) * strength * dt/1000;
+    lorenzeParams.beta += (lorenzeInputs.betaPlus - lorenzeInputs.betaMinus) * strength * dt/1000;
+    lorenzeParams.rho += (lorenzeInputs.rhoPlus - lorenzeInputs.rhoMinus) * strength * dt/1000;
+}
 
+let step = (position, dt) => {
     let [x, y, z, w] = position;
-    let velocity = [sigma * (y - x), (x * (rho - z) - y), (x * y - beta * z), 0]
+    let velocity = [lorenzeParams.sigma * (y - x), (x * (lorenzeParams.rho - z) - y), (x * y - lorenzeParams.beta * z), 0]
     let newPos = position.map((pos, i) => pos + velocity[i] * dt)
     if (newPos.some(isNaN)) {newPos = randomPoint()}
     return newPos;
 }
-
 let randomPoint = () => {
     let x = Math.random() * 2 - 1;
     let y = Math.random() * 2 - 1;
@@ -23,6 +68,7 @@ let randomPoint = () => {
 
 }
 
+let positions
 const numPoints = 10000;
 
 let main = async () => {
@@ -39,6 +85,8 @@ let main = async () => {
     }
 
     addCameraInputListeners(canvas)
+    document.addEventListener("keydown", lorenzeHandler)
+    document.addEventListener("keyup", lorenzeHandler)
 
     const vsSource = await fetch("./vert.glsl").then(res => res.text())
     const fsSource = await fetch("./frag.glsl").then(res => res.text())
@@ -48,7 +96,7 @@ let main = async () => {
 
     let program = linkProgram(gl, vertexShader, fragmentShader)
 
-    let positions = Array(numPoints).fill(0).flatMap(() => [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1, 1]);
+    positions = Array(numPoints).fill(0).flatMap(() => [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1, 1]);
 
     let uniforms = getUniformLocations(gl, program, ["u_cameraRotation", "u_cameraPosition", "u_cameraFov", "u_cameraAspect", "u_cameraNear", "u_cameraFar"])
     let attributes = getAttribLocations(gl, program, ["a_position"]);
@@ -63,6 +111,7 @@ let main = async () => {
         camera.aspect = w / h;
 
         moveCamera(dt);
+        lorenzeMoveParams(dt);
 
         gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
         
