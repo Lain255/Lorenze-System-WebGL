@@ -38,6 +38,8 @@ let movementHandler = (event) => {
     if (event.key.toLowerCase() === "shift") {
         camera.shifted = event.type === "keydown";
     }
+
+    
 }
 let mouseHandler = (canvas) => (event) => {
     if (globalThis.document.pointerLockElement === canvas) {
@@ -48,18 +50,17 @@ let mouseHandler = (canvas) => (event) => {
         }
     }
 }
-let addCameraInputListeners = (canvas) => {
+let addCameraInputListeners = (canvas, dt) => {
+    let mobileTouchscreen = true;
+    let deviceOrientation = true;
+    let deviceMotion = false;
+
+
     canvas.addEventListener("click", () => {
         if (globalThis.document.pointerLockElement !== canvas) {
             canvas.requestPointerLock();
         }
     });
-    
-    
-    globalThis.document.addEventListener("keydown", movementHandler)
-    globalThis.document.addEventListener("keyup", movementHandler);
-    globalThis.document.addEventListener("mousemove", mouseHandler(canvas));
-
     if(globalThis.document.fullscreenEnabled) {
         canvas.addEventListener("click", () => {
             canvas.requestFullscreen();
@@ -67,34 +68,63 @@ let addCameraInputListeners = (canvas) => {
     }
 
 
-    if (false && globalThis.DeviceOrientationEvent) {
-        globalThis.addEventListener("deviceorientation", (event) => {
-            camera.rotation[0] = -event.gamma * Math.PI / 180;
-            camera.rotation[1] = Math.PI/4 -event.beta * Math.PI / 180;
+    globalThis.document.addEventListener("keydown", movementHandler)
+    globalThis.document.addEventListener("keyup", movementHandler);
+    globalThis.document.addEventListener("mousemove", mouseHandler(canvas));
+    globalThis.document.addEventListener("keydown", (event) => {
+        if (event.key.toLowerCase() === "f") {
+            canvas.requestFullscreen().catch(console.error);
+        }
+    })
+
+    
+    
+
+
+    if (deviceOrientation && globalThis.DeviceOrientationEvent) {
+        let initialOrientation = {}
+        globalThis.addEventListener("deviceorientationabsolute", (event) => {
+            initialOrientation.alpha = initialOrientation.alpha ?? event.alpha;
+            initialOrientation.beta = initialOrientation.beta ?? event.beta;
+            initialOrientation.gamma = initialOrientation.gamma ?? event.gamma;
+            
+            camera.rotation[0] = -(event.alpha-initialOrientation.alpha) * Math.PI / 180;
+            camera.rotation[1] = (event.beta-initialOrientation.beta) * Math.PI / 180 % (Math.PI);
         });
     }
-    if (false) {
-        let id = undefined
+
+    if (deviceMotion && globalThis.DeviceMotionEvent) {
+        globalThis.addEventListener("devicemotion", (event) => {
+            console.log(event.interval)
+            camera.rotation[0] += -(event.interval/10000) * event.rotationRate.beta * Math.PI / 180;
+            camera.rotation[1] += -(event.interval/10000) * event.rotationRate.alpha * Math.PI / 180;
+        });
+    }
+
+
+    if (mobileTouchscreen) {
+        let touchID = undefined
         let touchStartX = 0;
         let touchStartY = 0;
 
-        globalThis.document.addEventListener("ontouchmove", (evt) => {
+        canvas.addEventListener("touchmove", (evt) => {
             let dx = evt.touches[0].clientX - touchStartX
             let dy = evt.touches[0].clientY - touchStartY
             touchStartX = evt.touches[0].clientX
             touchStartY = evt.touches[0].clientY
         
             if (evt.touches[0].identifier === touchID) {
-                camera.position[0] += dx / 1000;
-                camera.position[1] += dy / 1000;
+                touchID = undefined
+                camera.movementInput.left = dx;
+                camera.movementInput.up = dy;
             }
             else {
                 touchID = evt.touches[0].identifier
             }
         })
-        globalThis.document.addEventListener("ontouchend", (event) => {
+        canvas.addEventListener("touchend", (event) => {
             if (event.touches.length === 0) {
-                id = undefined;
+                touchID = undefined;
             }
         }, false)
 

@@ -1,4 +1,4 @@
-import { compileShader, linkProgram, createBuffer, resizeCanvasToDisplaySize, getUniformLocations, getAttribLocations } from "./gl.js";
+import { compileShader, linkProgram, createBuffer, resizeCanvasToDisplaySize, getUniformLocations, getAttribLocations, makeVertexArray } from "./gl.js";
 import { rotationMatrix } from "./matrix.js";
 import { camera, movementHandler, mouseHandler, moveCamera, addCameraInputListeners } from "./camera.js";
 
@@ -32,10 +32,6 @@ let lorenzeHandler = (event) => {
     }
     if (event.key.toLowerCase() === "r") {
         for (let i = 0; i < positions.length; i += 4) {
-            positions[i + 0] = Math.random() * 2 - 1;
-            positions[i + 1] = Math.random() * 2 - 1;
-            positions[i + 2] = Math.random() * 2 - 1;
-            positions[i + 3] = 1;
             lorenzeParams.sigma = 10;
             lorenzeParams.beta = 8.0/3.0;
             lorenzeParams.rho = 28;
@@ -69,12 +65,13 @@ let randomPoint = () => {
 }
 
 let positions
-const numPoints = 10000;
+const numPoints = 100000;
 
 let main = async () => {
     const canvas = document.querySelector("#glcanvas");
     // Initialize the GL context
     const gl = canvas.getContext("webgl2");
+      
 
     // Only continue if WebGL is available and working
     if (gl === null) {
@@ -84,26 +81,90 @@ let main = async () => {
       return;
     }
 
-    addCameraInputListeners(canvas)
+    let dt = 16;
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    addCameraInputListeners(canvas, dt)
     document.addEventListener("keydown", lorenzeHandler)
     document.addEventListener("keyup", lorenzeHandler)
 
+    const updatePointsVsSource = await fetch("./updatePointsVert.glsl").then(res => res.text())
     const vsSource = await fetch("./vert.glsl").then(res => res.text())
     const fsSource = await fetch("./frag.glsl").then(res => res.text())
 
     let vertexShader = compileShader(gl, gl.VERTEX_SHADER, vsSource);
     let fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    let updatePointsVs = compileShader(gl, gl.VERTEX_SHADER, updatePointsVsSource);
 
-    let program = linkProgram(gl, vertexShader, fragmentShader)
+    let renderProgram = linkProgram(gl, vertexShader, fragmentShader)
+    let updatePointsProgram = linkProgram(gl, updatePointsVs, fragmentShader, ["v_newPosition"])
+
+    let renderLocs = {}
+    renderLocs.uniforms = getUniformLocations(gl, renderProgram, ["u_cameraRotation", "u_cameraPosition", "u_cameraFov", "u_cameraAspect", "u_cameraNear", "u_cameraFar"])
+    renderLocs.attributes = getAttribLocations(gl, renderProgram, ["a_position"]);
+
+    let updatePointsLocs = {}
+    updatePointsLocs.uniforms = getUniformLocations(gl, updatePointsProgram, ["u_deltaTime", "u_sigma", "u_beta", "u_rho"])
+    updatePointsLocs.attributes = getAttribLocations(gl, updatePointsProgram, ["a_oldPosition", "a_initialPosition"]);
+
 
     positions = Array(numPoints).fill(0).flatMap(() => [Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1, 1]);
+    let position1Buffer = createBuffer(gl, new Float32Array(positions), gl.DYNAMIC_DRAW);
+    let position2Buffer = createBuffer(gl, new Float32Array(positions), gl.DYNAMIC_DRAW);
+    let initialPointsBuffer = createBuffer(gl, new Float32Array(positions), gl.DYNAMIC_DRAW);
 
-    let uniforms = getUniformLocations(gl, program, ["u_cameraRotation", "u_cameraPosition", "u_cameraFov", "u_cameraAspect", "u_cameraNear", "u_cameraFar"])
-    let attributes = getAttribLocations(gl, program, ["a_position"]);
 
-    let positionBuffer = createBuffer(gl, new Float32Array(positions), gl.DYNAMIC_DRAW);
 
-    let dt = 16;
+    const updateVA1 = makeVertexArray(
+        gl, [
+            [position1Buffer, updatePointsLocs.attributes.a_oldPosition],
+            [initialPointsBuffer, updatePointsLocs.attributes.a_initialPosition]
+        ]
+    );
+    const updateVA2 = makeVertexArray(
+        gl, [
+            [position2Buffer, updatePointsLocs.attributes.a_oldPosition],
+            [initialPointsBuffer, updatePointsLocs.attributes.a_initialPosition]
+        ]
+    );
+     
+    const renderVA1 = makeVertexArray(
+        gl, [[position1Buffer, renderLocs.attributes.a_position]]
+    );
+    const renderVA2 = makeVertexArray(
+        gl, [[position2Buffer, renderLocs.attributes.a_position]]
+    );
+
+    const initialPointsVA = makeVertexArray(
+        gl, [[initialPointsBuffer, updatePointsLocs.attributes.a_initialPosition]]
+    );
+
+    function makeTransformFeedback(gl, buffer) {
+        const tf = gl.createTransformFeedback();
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, buffer);
+        return tf;
+    }
+       
+    const tf1 = makeTransformFeedback(gl, position1Buffer);
+    const tf2 = makeTransformFeedback(gl, position2Buffer);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    gl.bindBuffer(gl.TRANSFORM_FEEDBACK_BUFFER, null);
+    
+    let current = {
+        updateVA: updateVA1,  // read from position1
+        tf: tf2,                      // write to position2
+        drawVA: renderVA2,              // draw with position2
+    };
+    let next = {
+        updateVA: updateVA2,  // read from position2
+        tf: tf1,                      // write to position1
+        drawVA: renderVA1,              // draw with position1
+    };      
+
+    
     while(true) {
         let timeStart = Date.now();
 
@@ -117,39 +178,40 @@ let main = async () => {
         gl.clearColor(0.0, 0.0, 0.0, 1.0);
         gl.clear(gl.COLOR_BUFFER_BIT);
         
-        gl.useProgram(program)
-        
-        for (let i = 0; i < positions.length; i += 4) {
-            let newPos = step(positions.slice(i, i + 4), dt / 1000); 
-            positions[i] = newPos[0];
-            positions[i + 1] = newPos[1];
-            positions[i + 2] = newPos[2];
-            positions[i + 3] = newPos[3];
-        }
+        gl.useProgram(updatePointsProgram);
+        gl.bindVertexArray(current.updateVA);
+        gl.uniform1f(updatePointsLocs.uniforms.u_deltaTime, dt/1000);
+        gl.uniform1f(updatePointsLocs.uniforms.u_sigma, lorenzeParams.sigma);
+        gl.uniform1f(updatePointsLocs.uniforms.u_beta, lorenzeParams.beta);
+        gl.uniform1f(updatePointsLocs.uniforms.u_rho, lorenzeParams.rho);
 
-        gl.enableVertexAttribArray(attributes.a_position);
-        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-        
-        // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
-        let size = 4;          // 2 components per iteration
-        let type = gl.FLOAT;   // the data is 32bit floats
-        let normalize = false; // don't normalize the data
-        let stride = 0;        // 0 = move forward size * sizeof(type) each iteration to get the next position
-        let offset = 0;        // start at the beginning of the buffer
-        gl.vertexAttribPointer(attributes.a_position, size, type, normalize, stride, offset)
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.DYNAMIC_DRAW);
-        
-        gl.uniformMatrix4fv(uniforms.u_cameraRotation, false, rotationMatrix(camera.rotation[0], camera.rotation[1]));
-        gl.uniform4fv(uniforms.u_cameraPosition, camera.position);
-        gl.uniform1f(uniforms.u_cameraFov, camera.fov);
-        gl.uniform1f(uniforms.u_cameraAspect, camera.aspect);
-        gl.uniform1f(uniforms.u_cameraNear, camera.near);
-        gl.uniform1f(uniforms.u_cameraFar, camera.far);
+        gl.enable(gl.RASTERIZER_DISCARD);
 
-        let primitiveType = gl.POINTS;
-        offset = 0;
-        let count = numPoints;
-        gl.drawArrays(primitiveType, offset, count);
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, current.tf);
+        gl.beginTransformFeedback(gl.POINTS);
+        gl.drawArrays(gl.POINTS, 0, numPoints);
+        gl.endTransformFeedback();
+        gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+        
+
+        gl.disable(gl.RASTERIZER_DISCARD);
+        
+        gl.useProgram(renderProgram)
+        gl.bindVertexArray(current.drawVA)
+        
+        gl.uniformMatrix4fv(renderLocs.uniforms.u_cameraRotation, false, rotationMatrix(camera.rotation[0], camera.rotation[1]));
+        gl.uniform4fv(renderLocs.uniforms.u_cameraPosition, camera.position);
+        gl.uniform1f(renderLocs.uniforms.u_cameraFov, camera.fov);
+        gl.uniform1f(renderLocs.uniforms.u_cameraAspect, camera.aspect);
+        gl.uniform1f(renderLocs.uniforms.u_cameraNear, camera.near);
+        gl.uniform1f(renderLocs.uniforms.u_cameraFar, camera.far);
+
+        gl.drawArrays(gl.POINTS, 0, numPoints);
+        
+
+        let temp = current
+        current = next
+        next = temp
 
         let timeEnd = Date.now();
         if (timeEnd - timeStart < dt) {

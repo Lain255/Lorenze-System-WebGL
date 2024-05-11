@@ -13,6 +13,7 @@ let rotationMatrix = (theta, phi) => {
     ]
     return matrix
 }
+
 let matrixVectorMultiply = (matrix, vector) => {
     let result = Array(4).fill(0);
     for (let i = 0; i < 4; i++) {

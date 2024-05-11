@@ -9,10 +9,13 @@ let compileShader = (gl, type, source) => {
     }
     return shader;
 }
-let linkProgram = (gl, vertexShader, fragmentShader) => {
+let linkProgram = (gl, vertexShader, fragmentShader, transformFeedbackVaryings) => {
     const program = gl.createProgram();
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
+    if (transformFeedbackVaryings) {
+        gl.transformFeedbackVaryings(program, transformFeedbackVaryings, gl.SEPARATE_ATTRIBS);
+    }
     gl.linkProgram(program);
     return program
 }
@@ -26,8 +29,8 @@ let createBuffer = (gl, data, hint) => {
 }
 let resizeCanvasToDisplaySize = (canvas) => {
     // Lookup the size the browser is displaying the canvas in CSS pixels.
-    const displayWidth  = Math.round(canvas.clientWidth);
-    const displayHeight = Math.round(canvas.clientHeight);
+    const displayWidth  = canvas.clientWidth;
+    const displayHeight = canvas.clientHeight;
 
 
     // Check if the canvas is not the same size.
@@ -41,4 +44,23 @@ let resizeCanvasToDisplaySize = (canvas) => {
     return [displayWidth, displayHeight];
 }
 
-export { compileShader, linkProgram, createBuffer, getUniformLocations, getAttribLocations, resizeCanvasToDisplaySize };
+let makeVertexArray = (gl, bufLocPairs) => {
+    const va = gl.createVertexArray();
+    gl.bindVertexArray(va);
+    for (const [buffer, loc] of bufLocPairs) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+        gl.enableVertexAttribArray(loc);
+        gl.vertexAttribPointer(
+            loc,      // attribute location
+            4,        // number of elements
+            gl.FLOAT, // type of data
+            false,    // normalize
+            0,        // stride (0 = auto)
+            0,        // offset
+        );
+    }
+    return va;
+}
+  
+
+export { compileShader, linkProgram, createBuffer, getUniformLocations, getAttribLocations, resizeCanvasToDisplaySize, makeVertexArray };
