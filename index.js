@@ -199,7 +199,7 @@ let main = async () => {
         gl.useProgram(renderProgram)
         gl.bindVertexArray(current.drawVA)
         
-        gl.uniformMatrix4fv(renderLocs.uniforms.u_cameraRotation, false, rotationMatrix(camera.rotation[0], camera.rotation[1]));
+        gl.uniformMatrix4fv(renderLocs.uniforms.u_cameraRotation, false, camera.rotationMatrix);
         gl.uniform4fv(renderLocs.uniforms.u_cameraPosition, camera.position);
         gl.uniform1f(renderLocs.uniforms.u_cameraFov, camera.fov);
         gl.uniform1f(renderLocs.uniforms.u_cameraAspect, camera.aspect);

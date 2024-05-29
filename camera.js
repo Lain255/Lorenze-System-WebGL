@@ -1,4 +1,4 @@
-import { rotationMatrix, matrixVectorMultiply } from "./matrix.js";
+import { rotationMatrix, matrixVectorMultiply, quaternionFromAxisAngle, quaternionFromEuler, quaternionMultiply, quaternionToMatrix, quaternionRotate } from "./matrix.js";
 
 let camera = {
     movementInput: {
@@ -11,6 +11,15 @@ let camera = {
     },
     position: [0.0, 0.0, -2.0, 0],
     rotation: [0, 0],
+    rotationQuaternion: [1, 0, 0, 0],
+    deviceOrientationQuaternion: [1, 0, 0, 0],
+    mouseQuaternion: [1, 0, 0, 0],
+    rotationMatrix: [
+        1, 0, 0, 0, 
+        0, 1, 0, 0, 
+        0, 0, 1, 0, 
+        0, 0, 0, 1
+    ],
     fov: 1,
     aspect: 1,
     near: 0.1,
@@ -87,9 +96,14 @@ let addCameraInputListeners = (canvas, dt) => {
             initialOrientation.alpha = initialOrientation.alpha ?? event.alpha;
             initialOrientation.beta = initialOrientation.beta ?? event.beta;
             initialOrientation.gamma = initialOrientation.gamma ?? event.gamma;
-            
-            camera.rotation[0] = -(event.alpha-initialOrientation.alpha) * Math.PI / 180;
-            camera.rotation[1] = (event.beta-initialOrientation.beta) * Math.PI / 180 % (Math.PI);
+
+            let q = [1,0,0,0]
+            q = quaternionMultiply(q, quaternionFromAxisAngle(quaternionRotate(q, [0, 1, 0]), (event.gamma) * Math.PI / 180));
+            q = quaternionMultiply(q, quaternionFromAxisAngle(quaternionRotate(q, [1, 0, 0]), (event.beta) * Math.PI / 180));
+            q = quaternionMultiply(q, quaternionFromAxisAngle(quaternionRotate(q, [0, 0, 1]), (-event.alpha) * Math.PI / 180));
+            //q = quaternionMultiply(q, quaternionFromAxisAngle([1, 0, 0], Math.PI));
+
+            camera.deviceOrientationQuaternion = q;
         });
     }
 
@@ -115,8 +129,8 @@ let addCameraInputListeners = (canvas, dt) => {
         
             if (evt.touches[0].identifier === touchID) {
                 touchID = undefined
-                camera.movementInput.left = dx;
-                camera.movementInput.up = dy;
+                camera.rotation[0] += dx / 100;
+                camera.rotation[1] += dy / 100;
             }
             else {
                 touchID = evt.touches[0].identifier
@@ -132,15 +146,21 @@ let addCameraInputListeners = (canvas, dt) => {
 
 }
 let moveCamera = (dt) => {
+    let mouseQuaternion = quaternionMultiply(quaternionFromAxisAngle([1, 0, 0], -camera.rotation[1]), quaternionFromAxisAngle([0, 1, 0], -camera.rotation[0]));
+    let deviceOrientationQuaternion = camera.deviceOrientationQuaternion;
+    camera.rotationQuaternion = quaternionMultiply( deviceOrientationQuaternion, mouseQuaternion);
+    camera.rotationMatrix = quaternionToMatrix(camera.rotationQuaternion);
+
     let movementVector = [
         camera.movementInput.right - camera.movementInput.left, 
         camera.movementInput.up - camera.movementInput.down, 
         camera.movementInput.forward - camera.movementInput.back,
         0
     ];
-    let cameraRotationMatrix = rotationMatrix(camera.rotation[0], camera.rotation[1])
-    let rotatedMovementVector = matrixVectorMultiply(cameraRotationMatrix, movementVector);
+    let rotatedMovementVector = matrixVectorMultiply(camera.rotationMatrix, movementVector);
     camera.position = camera.position.map((v, i) => v + rotatedMovementVector[i] * (camera.shifted ? 5 : 1) * dt/ 1000.0);
+
+    
 }
 
 export { camera, movementHandler, mouseHandler, addCameraInputListeners, moveCamera};
