@@ -1,18 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
+        <meta name="viewport" content="user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1, width=device-width, height=device-height, target-densitydpi=device-dpi" />
+
         <meta charset="utf-8" />
         <title>WebGL Demo</title>
         <script src="index.js" type="module"></script>
     </head>
 
     <body>
+
         <div id="overlay">
-            <p id="orientation">hello</p>
+            <img src="close.svg" id="closeIcon"/>
+            <input type="button" id="toggleGlobalOrientation" value="toggleGlobalOrientation"/>
+
+            <div>
+                <p>Sigma: </p><input type="range" id="sigmaSlider" value="10" min="-15" max="15" step="any"/>
+            </div>
+            <div>
+                <p>Beta: </p><input type="range" id="betaSlider" value="10" min="-15" max="15" step="any"/>
+
+            </div>
+            <div>
+                <p>Rho: </p><input type="range" id="rhoSlider" value="10" min="0" max="30" step="any"/>
+
+            </div>
+            <p id="debug">debug</p>
         </div>
         <div>
+            <img src="menuIcon.svg" id="menuIcon"/>
             <canvas id="glcanvas" height="400px" width="400px"></canvas>
         </div>
+
+
         
         
     </body>
@@ -39,9 +59,50 @@
 
     }
     #overlay {
+        opacity: 90%;
         position: absolute;
-        background-color: white;
-        font-size: 60px;
+        background-color: rgb(255, 255, 255, 0);
+        width: 100vw;
+
+        display: flex;
+        flex-direction: column;
+        justify-content: space-evenly;
+        align-items: center;
+        color:white
 
     }
+    #overlay > div {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-evenly;
+        align-items: center;
+
+    }
+    #menuIcon {
+        display: none;
+        position: absolute;
+        width: 40px;
+        /*width: calc(min(100vw, 750px) / 10);*/
+        top: 10px;
+        left: 10px;
+    }
+    #closeIcon {
+        position: absolute;
+        justify-self:start;
+        align-self: flex-start;
+        width: 40px;
+        top: 10px;
+        left: 10px;
+
+    }
+    input[type="range"] {
+
+        background: #053a5f;
+    }
+    input[type="button"] {
+        background-color: #FFFFFF;
+        border: 2px solid #000000;
+
+    }
+
 </style>

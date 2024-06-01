@@ -1,6 +1,6 @@
 import { compileShader, linkProgram, createBuffer, resizeCanvasToDisplaySize, getUniformLocations, getAttribLocations, makeVertexArray } from "./gl.js";
-import { rotationMatrix } from "./matrix.js";
-import { camera, movementHandler, mouseHandler, moveCamera, addCameraInputListeners } from "./camera.js";
+import { camera, moveCamera, addCameraInputListeners } from "./camera.js";
+
 
 let lorenzeParams = {
     sigma : 10,
@@ -48,13 +48,6 @@ let lorenzeMoveParams = (dt) => {
     lorenzeParams.rho += (lorenzeInputs.rhoPlus - lorenzeInputs.rhoMinus) * strength * dt/1000;
 }
 
-let step = (position, dt) => {
-    let [x, y, z, w] = position;
-    let velocity = [lorenzeParams.sigma * (y - x), (x * (lorenzeParams.rho - z) - y), (x * y - lorenzeParams.beta * z), 0]
-    let newPos = position.map((pos, i) => pos + velocity[i] * dt)
-    if (newPos.some(isNaN)) {newPos = randomPoint()}
-    return newPos;
-}
 let randomPoint = () => {
     let x = Math.random() * 2 - 1;
     let y = Math.random() * 2 - 1;
@@ -68,6 +61,28 @@ let positions
 const numPoints = 100000;
 
 let main = async () => {
+    const sigmaSlider = document.querySelector("#sigmaSlider");
+    sigmaSlider.value = lorenzeParams.sigma;
+    sigmaSlider.addEventListener("input", (event) => {
+        lorenzeParams.sigma = parseFloat(event.target.value);
+    });
+
+    const betaSlider = document.querySelector("#betaSlider");
+    betaSlider.value = lorenzeParams.beta;
+    betaSlider.addEventListener("input", (event) => {
+        lorenzeParams.beta = parseFloat(event.target.value);
+    });
+    
+    const rhoSlider = document.querySelector("#rhoSlider");
+    rhoSlider.value = lorenzeParams.rho;
+    rhoSlider.addEventListener("input", (event) => {
+        lorenzeParams.rho = parseFloat(event.target.value);
+    });
+
+
+
+
+
     const canvas = document.querySelector("#glcanvas");
     // Initialize the GL context
     const gl = canvas.getContext("webgl2");

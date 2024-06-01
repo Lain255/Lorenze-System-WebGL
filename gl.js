@@ -29,8 +29,10 @@ let createBuffer = (gl, data, hint) => {
 }
 let resizeCanvasToDisplaySize = (canvas) => {
     // Lookup the size the browser is displaying the canvas in CSS pixels.
-    const displayWidth  = canvas.clientWidth;
-    const displayHeight = canvas.clientHeight;
+    const dpr = window.devicePixelRatio;
+    const displayWidth  = Math.round(canvas.clientWidth * dpr);
+    const displayHeight = Math.round(canvas.clientHeight * dpr);
+
 
 
     // Check if the canvas is not the same size.
